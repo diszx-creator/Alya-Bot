@@ -1,0 +1,16 @@
+{
+  "name": "alya-chan-bot",
+  "version": "1.2.0",
+  "description": "WhatsApp Bot AI 2026 - Alya.chan Project",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.6.0",
+    "@hapi/boom": "^10.0.1",
+    "pino": "^9.0.0",
+    "axios": "^1.6.0",
+    "canvas": "^2.11.2"
+  }
+}
