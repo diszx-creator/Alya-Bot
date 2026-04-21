@@ -2,9 +2,10 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = requi
 const pino = require("pino")
 const { Boom } = require("@hapi/boom")
 const diszxe = require("./diszxe")
+const setting = require("./setting")
 
 async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState("session")
+    const { state, saveCreds } = await useMultiFileAuthState(setting.sessionName)
 
     const sock = makeWASocket({
         logger: pino({ level: "silent" }),
@@ -26,7 +27,7 @@ async function startBot() {
                 console.log("Bot logout")
             }
         } else if (connection === "open") {
-            console.log("Bot terhubung")
+            console.log(`Bot ${setting.botName} terhubung`)
         }
     })
 
@@ -34,7 +35,7 @@ async function startBot() {
         const msg = messages[0]
         if (!msg.message || msg.key.fromMe) return
 
-        await diszxe(sock, msg)
+        await diszxe(sock, msg, setting)
     })
 }
 
