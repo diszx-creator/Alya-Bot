@@ -2,7 +2,7 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = requi
 const pino = require("pino")
 const { Boom } = require("@hapi/boom")
 const diszxe = require("./diszxe")
-const setting = require("./setting")
+const setting = require("./settings")
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState(setting.sessionName)
