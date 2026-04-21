@@ -1,16 +1,14 @@
 {
-  "name": "alya-chan-bot",
-  "version": "1.2.0",
-  "description": "WhatsApp Bot AI 2026 - Alya.chan Project",
+  "name": "wa-bot-simple",
+  "version": "1.0.0",
+  "description": "WhatsApp Bot menggunakan Baileys",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.6.0",
-    "@hapi/boom": "^10.0.1",
-    "pino": "^9.0.0",
-    "axios": "^1.6.0",
-    "canvas": "^2.11.2"
+    "@whiskeysockets/baileys": "^6.7.5",
+    "pino": "^8.17.0"
   }
 }
