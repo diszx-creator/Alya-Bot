@@ -5,8 +5,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 
 // Database Setup
-const dbPath = './Database/users.json';
-if (!fs.existsSync('./Database')) fs.mkdirSync('./Database');
+const dbPath = './database/users.json';
+if (!fs.existsSync('./database')) fs.mkdirSync('./database');
 if (!fs.existsSync(dbPath)) fs.writeFileSync(dbPath, JSON.stringify([]));
 
 module.exports = async (sock, m, chatUpdate) => {
