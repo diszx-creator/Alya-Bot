@@ -1,89 +1,41 @@
-require('./settings')
-const { modul } = require('./module');
-const { baileys, boom, chalk, fs, figlet, FileType, path, pino, process, PhoneNumber, axios, yargs, _ } = modul;
-const { Boom } = boom
-const {
-    default: makeWASocket,
-    DisconnectReason,
-    makeInMemoryStore,
-    useMultiFileAuthState,
-    delay,
-    fetchLatestBaileysVersion,
-    jidDecode,
-    makeCacheableSignalKeyStore,
-    proto
-} = require("@whiskeysockets/baileys")
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys")
+const pino = require("pino")
+const { Boom } = require("@hapi/boom")
+const diszxe = require("./diszxe")
 
-const { smsg, color } = require('./lib/myfunc')
-const pino_logger = pino({ level: 'silent' })
-const store = makeInMemoryStore({ logger: pino_logger.child({ level: 'silent', stream: 'store' }) })
-const readline = require("readline")
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState("session")
 
-const question = (text) => new Promise((resolve) => rl.question(text, resolve))
-
-async function startDiszx() {
-    const { state, saveCreds } = await useMultiFileAuthState(`./${sessionName}`)
-    const { version } = await fetchLatestBaileysVersion()
-
-    const diszx = makeWASocket({
-        logger: pino({ level: 'silent' }),
-        printQRInTerminal: false, 
-        auth: {
-            creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
-        },
-        browser: ["Ubuntu", "Chrome", "20.0.04"],
-        version
+    const sock = makeWASocket({
+        logger: pino({ level: "silent" }),
+        auth: state
     })
 
-    // --- Pairing Code System ---
-    if (!diszx.authState.creds.registered) {
-        const phoneNumber = await question(color('\n\nMasukan nomor WhatsApp Bot kamu (Contoh: 628xxx):\n', 'magenta'));
-        const code = await diszx.requestPairingCode(phoneNumber.trim());
-        console.log(color(`\nKODE PAIRING DISZX BOT:`, 'green'), color(`${code}`, 'white', 'bold'));
-    }
+    sock.ev.on("creds.update", saveCreds)
 
-    store.bind(diszx.ev)
-
-    diszx.ev.on('messages.upsert', async chatUpdate => {
-        try {
-            const kay = chatUpdate.messages[0]
-            if (!kay.message) return
-            if (kay.key.fromMe) return
-            const m = smsg(diszx, kay, store)
-            
-            // Memanggil fitur utama dari diszxe.js
-            require('./diszxe')(diszx, m, chatUpdate, store)
-        } catch (err) {
-            console.log(err)
-        }
-    })
-
-    diszx.ev.on('connection.update', async (update) => {
+    sock.ev.on("connection.update", (update) => {
         const { connection, lastDisconnect } = update
-        if (connection === 'close') {
-            let reason = new Boom(lastDisconnect?.error)?.output.statusCode
-            if (reason !== DisconnectReason.loggedOut) {
-                startDiszx() // Auto Reconnect
+
+        if (connection === "close") {
+            const shouldReconnect =
+                (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut
+
+            if (shouldReconnect) {
+                startBot()
+            } else {
+                console.log("Bot logout")
             }
-        } else if (connection === 'open') {
-            console.log(color('\n[ ONLINE ] Diszx Bot Berhasil Terhubung!', 'green'))
+        } else if (connection === "open") {
+            console.log("Bot terhubung")
         }
     })
 
-    diszx.ev.on('creds.update', saveCreds)
+    sock.ev.on("messages.upsert", async ({ messages }) => {
+        const msg = messages[0]
+        if (!msg.message || msg.key.fromMe) return
 
-    diszx.decodeJid = (jid) => {
-        if (!jid) return jid
-        if (/:\d+@/gi.test(jid)) {
-            let decode = jidDecode(jid) || {}
-            return decode.user && decode.server && decode.user + '@' + decode.server || jid
-        } else return jid
-    }
-
-    return diszx
+        await diszxe(sock, msg)
+    })
 }
 
-startDiszx()
-
+startBot()
