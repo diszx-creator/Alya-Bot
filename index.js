@@ -1,58 +1,89 @@
-require('./settings');
-const { 
-    makeWASocket, useMultiFileAuthState, DisconnectReason, 
-    fetchLatestBaileysVersion, makeCacheableSignalKeyStore 
-} = require("@whiskeysockets/baileys");
-const pino = require('pino');
-const { Boom } = require('@hapi/boom');
-const readline = require("readline");
+require('./settings')
+const { modul } = require('./module');
+const { baileys, boom, chalk, fs, figlet, FileType, path, pino, process, PhoneNumber, axios, yargs, _ } = modul;
+const { Boom } = boom
+const {
+    default: makeWASocket,
+    DisconnectReason,
+    makeInMemoryStore,
+    useMultiFileAuthState,
+    delay,
+    fetchLatestBaileysVersion,
+    jidDecode,
+    makeCacheableSignalKeyStore,
+    proto
+} = require("@whiskeysockets/baileys")
 
-const question = (text) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    return new Promise((resolve) => rl.question(text, (answer) => { rl.close(); resolve(answer) }));
-};
+const { smsg, color } = require('./lib/myfunc')
+const pino_logger = pino({ level: 'silent' })
+const store = makeInMemoryStore({ logger: pino_logger.child({ level: 'silent', stream: 'store' }) })
+const readline = require("readline")
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
 
-async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('session_alya');
-    const { version } = await fetchLatestBaileysVersion();
+const question = (text) => new Promise((resolve) => rl.question(text, resolve))
 
-    const sock = makeWASocket({
+async function startDiszx() {
+    const { state, saveCreds } = await useMultiFileAuthState(`./${sessionName}`)
+    const { version } = await fetchLatestBaileysVersion()
+
+    const diszx = makeWASocket({
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false, 
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
         },
-        printQRInTerminal: false,
-        version,
-        logger: pino({ level: 'silent' }),
-        browser: ["Ubuntu", "Chrome", "20.0.04"]
-    });
+        browser: ["Ubuntu", "Chrome", "20.0.04"],
+        version
+    })
 
-    if (!sock.authState.creds.registered) {
-        let phoneNumber = global.botNumber.replace(/[^0-9]/g, '');
-        if (!phoneNumber) phoneNumber = await question('Masukkan nomor bot (628xxx): ');
-        setTimeout(async () => {
-            let code = await sock.requestPairingCode(phoneNumber);
-            code = code?.match(/.{1,4}/g)?.join("-") || code;
-            console.log(`\n\x1b[42m KODE PAIRING ANDA: \x1b[0m \x1b[1m\x1b[32m${code}\x1b[0m\n`);
-        }, 3000);
+    // --- Pairing Code System ---
+    if (!diszx.authState.creds.registered) {
+        const phoneNumber = await question(color('\n\nMasukan nomor WhatsApp Bot kamu (Contoh: 628xxx):\n', 'magenta'));
+        const code = await diszx.requestPairingCode(phoneNumber.trim());
+        console.log(color(`\nKODE PAIRING DISZX BOT:`, 'green'), color(`${code}`, 'white', 'bold'));
     }
 
-    sock.ev.on('creds.update', saveCreds);
-    sock.ev.on('messages.upsert', async (chatUpdate) => {
-        try {
-            const m = chatUpdate.messages[0];
-            if (!m || !m.message) return;
-            require('./diszxe')(sock, m, chatUpdate);
-        } catch (err) { console.log(err) }
-    });
+    store.bind(diszx.ev)
 
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
-        if (connection === 'close') {
-            if ((lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut) startBot();
-        } else if (connection === 'open') {
-            console.log(`\n\x1b[32m[ ONLINE ] ${global.botname} Berhasil Terhubung!\x1b[0m\n`);
+    diszx.ev.on('messages.upsert', async chatUpdate => {
+        try {
+            const kay = chatUpdate.messages[0]
+            if (!kay.message) return
+            if (kay.key.fromMe) return
+            const m = smsg(diszx, kay, store)
+            
+            // Memanggil fitur utama dari diszxe.js
+            require('./diszxe')(diszx, m, chatUpdate, store)
+        } catch (err) {
+            console.log(err)
         }
-    });
+    })
+
+    diszx.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update
+        if (connection === 'close') {
+            let reason = new Boom(lastDisconnect?.error)?.output.statusCode
+            if (reason !== DisconnectReason.loggedOut) {
+                startDiszx() // Auto Reconnect
+            }
+        } else if (connection === 'open') {
+            console.log(color('\n[ ONLINE ] Diszx Bot Berhasil Terhubung!', 'green'))
+        }
+    })
+
+    diszx.ev.on('creds.update', saveCreds)
+
+    diszx.decodeJid = (jid) => {
+        if (!jid) return jid
+        if (/:\d+@/gi.test(jid)) {
+            let decode = jidDecode(jid) || {}
+            return decode.user && decode.server && decode.user + '@' + decode.server || jid
+        } else return jid
+    }
+
+    return diszx
 }
-startBot();
+
+startDiszx()
+
